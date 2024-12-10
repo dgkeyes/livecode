@@ -26,7 +26,7 @@ livecode is an R package that enables you to broadcast a local R (or any other t
 You can install the development version of `livecode` from this GitHub repository:
 
 ``` r
-remotes::install_github("rundel/livecode")
+remotes::install_github("JosephBARBIERDARNAL/livecode")
 ```
 
 ## Usage
