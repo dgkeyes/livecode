@@ -482,7 +482,7 @@ serve_file <- function(file, ip, port, interval = 1,
     )
   )
 
-  server$send_msg(text = welcome_msg)
+  # server$send_msg(text = welcome_msg)
 
   invisible(server)
 }
