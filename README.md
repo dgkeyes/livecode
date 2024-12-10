@@ -7,6 +7,32 @@
 > author, or someone else, decides to create and maintain an updated
 > version.*
 
+Use with ngrok (XXXXXXXXXXXXXXX is your authtoken from
+<https://dashboard.ngrok.com/get-started/setup/macos>)
+
+``` bash
+brew install ngrok/ngrok/ngrok
+ngrok config add-authtoken XXXXXXXXXXXXXXX
+```
+
+Then in `R` run:
+
+``` r
+remotes::install_github("JosephBARBIERDARNAL/livecode")
+server <- livecode::serve_file()
+```
+
+This will open a new tab in your browser (empty). Copy the url (looking
+like: <http://191.169.1.7:17151>) and then run:
+
+``` bash
+ngrok http http://191.169.1.7:17151
+```
+
+Then go to the public URL displayed in the terminal.
+
+<br><br><br><br>
+
 # livecode <img src='man/figures/logo.png' align="right" height="140" />
 
 <!-- badges: start -->
@@ -32,7 +58,7 @@ You can install the development version of `livecode` from this GitHub
 repository:
 
 ``` r
-remotes::install_github("JosephBARBIERDARNAL/livecode")
+remotes::install_github("rundel/livecode")
 ```
 
 ## Usage
