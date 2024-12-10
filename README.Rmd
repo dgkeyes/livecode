@@ -1,6 +1,10 @@
 ---
 output: github_document
 ---
+
+> *Note: This repository serves as a temporary replacement for the [original repo](https://github.com/rundel/livecode), which is currently unmaintained and contains some bugs. I’ve made a few fixes to suit my specific use case, but I do not plan to maintain this version long-term. This is intended as a workaround until the original author, or someone else, decides to create and maintain an updated version.*
+
+
 # livecode <img src='man/figures/logo.png' align="right" height="140" />
 
 <!-- badges: start -->
