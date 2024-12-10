@@ -1,34 +1,28 @@
 lc_server <- R6::R6Class(
   "LiveCodeServer",
-
   cloneable = FALSE,
   inherit = httpuv:::WebServer,
   public = list(
     have_msgs = function() {
       length(private$msg_queue) > 0
     },
-
     get_msgs = function() {
-      msgs = private$msg_queue
-      private$msg_queue = list()
+      msgs <- private$msg_queue
+      private$msg_queue <- list()
       msgs
     },
-
     peek_msgs = function() {
       purrr::map_chr(private$msg_queue, ~ .$get_text())
     },
-
     add_msg = function(m) {
-
-
       if (is.character(m) & length(m) == 1) {
-        m = noty_msg$new(m)
+        m <- noty_msg$new(m)
       }
 
       if (!inherits(m, "noty_msg")) {
         usethis::ui_stop("Invalid message type, must either be a character or noty_msg object.")
       }
-      private$msg_queue = append(private$msg_queue, m)
+      private$msg_queue <- append(private$msg_queue, m)
     }
   ),
   private = list(
@@ -37,76 +31,83 @@ lc_server <- R6::R6Class(
 )
 
 
-file_stream_server = function(host, port, file, file_id, interval = 3, template = "prism") {
-  port = as.integer(port)
-  file_cache = file_cache(file)
-  page = glue::glue(
+file_stream_server <- function(host, port, file, file_id, interval = 3, template = "prism", upgrade_content_security_policy) {
+  port <- as.integer(port)
+  file_cache <- file_cache(file)
+  if (upgrade_content_security_policy == TRUE) {
+    content_security_policy <- '<meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">'
+  } else {
+    content_security_policy <- ""
+  }
+  page <- glue::glue(
     readr::read_file(get_template(template)),
     lang = "r",
-    title = file
+    title = file,
+    meta = content_security_policy
   )
 
-  get_next_ws_id = local({
-    next_ws_id = 0L
+  get_next_ws_id <- local({
+    next_ws_id <- 0L
     function() {
       sprintf("%012d", next_ws_id <<- next_ws_id + 1L)
     }
   })
 
-  websockets = new.env(parent = emptyenv())
+  websockets <- new.env(parent = emptyenv())
 
-  websocket_loop = function() {
-    if (!server$isRunning())
+  websocket_loop <- function() {
+    if (!server$isRunning()) {
       return()
+    }
 
     if (is_rstudio() & !is.null(file_id)) {
       rstudioapi::documentSave(file_id)
     }
 
-    msg = list(interval = interval)
-    if (file_cache$need_update())
-      msg[["content"]] = file_cache$content
+    msg <- list(interval = interval)
+    if (file_cache$need_update()) {
+      msg[["content"]] <- file_cache$content
+    }
 
     if (server$have_msgs()) {
-      msgs = purrr::map(server$get_msgs(), ~ .$get_msg())
+      msgs <- purrr::map(server$get_msgs(), ~ .$get_msg())
 
-      msg[["messages"]] = msgs
+      msg[["messages"]] <- msgs
     }
 
     if (is_rstudio()) {
-      ctx = rstudioapi::getSourceEditorContext()
-      open_file = path.expand(ctx[["path"]])
+      ctx <- rstudioapi::getSourceEditorContext()
+      open_file <- path.expand(ctx[["path"]])
 
       if (file == open_file) {
-        ln = extract_line_nums(ctx[["selection"]])
-        msg[["selection"]] = ln
+        ln <- extract_line_nums(ctx[["selection"]])
+        msg[["selection"]] <- ln
       }
     }
 
-    msg = jsonlite::toJSON(msg, auto_unbox = TRUE)
+    msg <- jsonlite::toJSON(msg, auto_unbox = TRUE)
 
-    for(ws_id in names(websockets)) {
+    for (ws_id in names(websockets)) {
       websockets[[ws_id]]$send(msg)
     }
 
     later::later(websocket_loop, interval)
   }
 
-  app = list(
+  app <- list(
     call = function(req) {
       list(
         status = 200L,
         headers = list(
-          #'Content-Type' = 'text/html'
-          'Content-Type'='text/html; charset=UTF-8'
+          #' Content-Type' = 'text/html'
+          "Content-Type" = "text/html; charset=UTF-8"
         ),
         body = page
       )
     },
-
     onWSOpen = function(ws) {
-      ws_id = get_next_ws_id()
-      websockets[[ws_id]] = ws
+      ws_id <- get_next_ws_id()
+      websockets[[ws_id]] <- ws
 
       ws$onClose(
         function() {
@@ -115,23 +116,23 @@ file_stream_server = function(host, port, file, file_id, interval = 3, template 
       )
 
       ## Send initial message with current file contents
-      msg = list(
+      msg <- list(
         interval = interval,
         content = file_cache$content
       )
       ws$send(jsonlite::toJSON(msg, auto_unbox = TRUE))
 
-      if (as.integer(ws_id) == 1)
+      if (as.integer(ws_id) == 1) {
         websocket_loop()
+      }
     },
-
     staticPaths = list(
       "/web" = livecode:::pkg_resource("resources")
     )
   )
 
   # Must be defined for the websocket_loop above to work
-  server = lc_server$new(host, port, app)
+  server <- lc_server$new(host, port, app)
 
   server
 }
@@ -145,7 +146,7 @@ file_stream_server = function(host, port, file, file_id, interval = 3, template 
 #'
 #' @export
 
-lc_server_iface = R6::R6Class(
+lc_server_iface <- R6::R6Class(
   "LiveCodeServer_Interface",
   cloneable = FALSE,
   private = list(
@@ -157,107 +158,106 @@ lc_server_iface = R6::R6Class(
     interval = NULL,
     bitly_url = NULL,
     server = NULL,
-
+    upgrade_content_security_policy = NULL,
     init_file = function(file, auto_save) {
+      if (missing(file)) {
+        file <- NULL
+      } else if (!is.null(file)) {
+        file <- path.expand(file)
+      }
 
-      if (missing(file))
-        file = NULL
-      else if (!is.null(file))
-        file = path.expand(file)
-
-      file_id = NULL
+      file_id <- NULL
       if (is_rstudio()) {
         if (is.character(file)) {
           rstudioapi::navigateToFile(file)
           Sys.sleep(0.5)
         }
 
-        ctx = rstudioapi::getSourceEditorContext()
+        ctx <- rstudioapi::getSourceEditorContext()
 
-        file = path.expand(ctx[["path"]])
-        file_id = ctx[["id"]]
+        file <- path.expand(ctx[["path"]])
+        file_id <- ctx[["id"]]
       }
 
-      if (!auto_save)
-        file_id = NULL
+      if (!auto_save) {
+        file_id <- NULL
+      }
 
       if (is.null(file) | file == "") {
-        usethis::ui_stop( paste(
+        usethis::ui_stop(paste(
           "No file specified, if you are using RStudio ",
           "make sure the current open file has been saved ",
           "at least once."
-        ) )
+        ))
       }
 
-      private$file = file
-      private$file_id = file_id
+      private$file <- file
+      private$file_id <- file_id
     },
-
     init_ip = function(ip) {
       if (missing(ip)) {
-        ip = network_interfaces()[["ip"]][1]
+        ip <- network_interfaces()[["ip"]][1]
 
-        #usethis::ui_info( c(
+        # usethis::ui_info( c(
         #  "No ip address provided, using {usethis::ui_value(ip)}",
         #  "(If this does not work check available ips using {usethis::ui_code(\"network_interfaces()\")})"
-        #))
+        # ))
       }
 
       if (is.na(iptools::ip_classify(ip))) {
-        usethis::ui_stop( paste(
+        usethis::ui_stop(paste(
           "Invalid ip address provided ({usethis::ui_value(ip)})."
-        ) )
+        ))
       }
 
-      private$ip = ip
+      private$ip <- ip
     },
-
     init_port = function(port) {
       if (missing(port)) {
-        port = httpuv::randomPort(host = private$ip)
-        #usethis::ui_info( paste(
+        port <- httpuv::randomPort(host = private$ip)
+        # usethis::ui_info( paste(
         #  "No port provided, using port {usethis::ui_value(port)}."
-        #))
+        # ))
       }
 
-      port = as.integer(port)
+      port <- as.integer(port)
 
       if (port < 1024L | port > 49151L) {
-        usethis::ui_stop( paste(
+        usethis::ui_stop(paste(
           "Invalid port ({usethis::ui_value(ip)}), value must be between 1024 and 49151."
-        ) )
+        ))
       }
 
-      private$port = port
+      private$port <- port
     },
-
     init_bitly = function() {
-      res = purrr::safely(bitly_shorten)(self$url)
+      res <- purrr::safely(bitly_shorten)(self$url)
       if (succeeded(res)) {
-        private$bitly_url = result(res)
+        private$bitly_url <- result(res)
       } else {
-        usethis::ui_oops( paste0(
+        usethis::ui_oops(paste0(
           "Failed to create bitlink: ",
           error_msg(res)
-        ) )
+        ))
       }
     },
-
     init_auto_save = function() {
-      if (!check_strip_trailing_ws())
+      if (!check_strip_trailing_ws()) {
         return()
+      }
 
-      opt_name = usethis::ui_value('Strip trailing horizontal whitespace when saving')
-      if (using_project())
-        menu = "Tools > Project Options > Code Editing"
-      else
-        menu = "Tools > Global Options > Code > Saving"
+      opt_name <- usethis::ui_value("Strip trailing horizontal whitespace when saving")
+      if (using_project()) {
+        menu <- "Tools > Project Options > Code Editing"
+      } else {
+        menu <- "Tools > Global Options > Code > Saving"
+      }
 
-      usethis::ui_oops( paste(
+      usethis::ui_oops(paste(
         "You are running livecode with {usethis::ui_code('auto_save=TRUE')} with the {opt_name}",
         "option checked in RStudio. This can result in undesirable behavior while you broadcast.\n",
         "To resolve this, from RStudio's menu select:\n {menu} and uncheck {opt_name}."
-      ) )
+      ))
     }
   ),
   public = list(
@@ -271,46 +271,52 @@ lc_server_iface = R6::R6Class(
     #' @param bitly should a bitly bit link be created for the server.
     #' @param auto_save should the broadcast file be auto saved update tic.
     #' @param open_browser should a browser session be opened.
-    initialize = function(
-      file, ip, port, interval = 2,
-      bitly = FALSE, auto_save = TRUE, open_browser = TRUE
-    ) {
+    #' @param upgrade_content_security_policy should insecure requests be upgraded.
+    initialize = function(file, ip, port, interval = 2,
+                          bitly = FALSE, auto_save = TRUE, open_browser = TRUE,
+                          upgrade_content_security_policy = FALSE) {
       private$init_file(file, auto_save)
       private$init_ip(ip)
       private$init_port(port)
 
-      private$template = "prism"
-      private$interval = interval
+      private$template <- "prism"
+      private$interval <- interval
+      private$upgrade_content_security_policy <-
+        upgrade_content_security_policy
       self$start()
 
-      if (bitly)
+      if (bitly) {
         private$init_bitly()
+      }
 
-      if (auto_save)
+      if (auto_save) {
         private$init_auto_save()
+      }
 
-      if (open_browser)
-        later::later(~self$open(), 1)
+      if (open_browser) {
+        later::later(~ self$open(), 1)
+      }
     },
 
     #' @description
     #' Open server in browser
     open = function() {
-      if (self$is_running())
+      if (self$is_running()) {
         browseURL(self$url, browser = get_browser())
-      else
+      } else {
         usethis::ui_stop("The server is not currently running!")
+      }
     },
 
     #' @description
     #' Class print method
     print = function() {
-      usethis::ui_line( paste(
+      usethis::ui_line(paste(
         crayon::bold("livecode server:"),
         crayon::red(fs::path_file(private$file)),
         "@",
         crayon::underline(crayon::blue(self$url))
-      ) )
+      ))
     },
 
     #' @description
@@ -329,26 +335,26 @@ lc_server_iface = R6::R6Class(
                         ...,
                         parse_md = TRUE) {
       if (parse_md) {
-        text = markdown::markdownToHTML(
+        text <- markdown::mark_html(
           text = text,
-          fragment.only = TRUE,
-          extensions = markdown::markdownExtensions()
+          template = FALSE
         )
       } else {
-        text = paste(text, collapse = "\n")
+        text <- paste(text, collapse = "\n")
       }
 
-      args = c(
+      args <- c(
         list(text = text, type = type, theme = theme, layout = layout),
         list(...)
       )
 
-      text_has_link = grepl("<a ", text)
-      closeWith_used = "closeWith" %in% names(args)
+      text_has_link <- grepl("<a ", text)
+      closeWith_used <- "closeWith" %in% names(args)
 
       # Message closes with a button click
-      if (text_has_link & !closeWith_used)
-        args[["closeWith"]] = list("button")
+      if (text_has_link & !closeWith_used) {
+        args[["closeWith"]] <- list("button")
+      }
 
 
       private$server$add_msg(
@@ -366,21 +372,23 @@ lc_server_iface = R6::R6Class(
     #' @description
     #' Start the server
     start = function() {
-      private$server = file_stream_server(
+      private$server <- file_stream_server(
         private$ip, private$port, private$file, private$file_id,
-        template = private$template, interval = private$interval
+        template = private$template, interval = private$interval,
+        upgrade_content_security_policy =
+          private$upgrade_content_security_policy
       )
 
-      usethis::ui_done( paste(
+      usethis::ui_done(paste(
         "Started sharing {usethis::ui_value(fs::path_file(private$file))}",
         "at {usethis::ui_value(self$url)}."
-      ) )
+      ))
 
       if (is_ip_private(private$ip)) {
-        usethis::ui_oops( paste(
+        usethis::ui_oops(paste(
           "The current ip address ({usethis::ui_value(private$ip)}) for the server is private,",
           "only users on the same local network are likely to be able to connect."
-        ) )
+        ))
       }
 
       register_server(self)
@@ -401,9 +409,9 @@ lc_server_iface = R6::R6Class(
 
       private$server$stop()
 
-      usethis::ui_done( paste(
+      usethis::ui_done(paste(
         "Stopped server at {usethis::ui_value(self$url)}."
-      ) )
+      ))
 
       deregister_server(self)
     },
@@ -421,10 +429,11 @@ lc_server_iface = R6::R6Class(
   active = list(
     #' @field url The current url of the server.
     url = function() {
-      if (!is.null(private$bitly_url))
+      if (!is.null(private$bitly_url)) {
         private$bitly_url
-      else
+      } else {
         glue::glue("http://{private$ip}:{private$port}")
+      }
     },
     #' @field path The path of the file being served.
     path = function() {
@@ -442,18 +451,24 @@ lc_server_iface = R6::R6Class(
 #' @param bitly should a bitly bit link be created for the server.
 #' @param auto_save should the broadcast file be auto saved during each update tic.
 #' @param open_browser should a browser session be opened.
+#' @param upgrade_content_security_policy should insecure requests be upgraded.
 #'
 #' @export
 
-serve_file = function(file, ip, port, interval = 1,
-                      bitly = FALSE, auto_save = TRUE,
-                      open_browser = TRUE) {
-  server = lc_server_iface$new(file = file, ip = ip,
-                               port = port, interval = interval,
-                               bitly = bitly, auto_save = auto_save,
-                               open_browser = open_browser)
+serve_file <- function(file, ip, port, interval = 1,
+                       bitly = FALSE, auto_save = TRUE,
+                       open_browser = TRUE,
+                       upgrade_content_security_policy = FALSE) {
+  server <- lc_server_iface$new(
+    file = file, ip = ip,
+    port = port, interval = interval,
+    bitly = bitly, auto_save = auto_save,
+    open_browser = open_browser,
+    upgrade_content_security_policy =
+      upgrade_content_security_policy
+  )
 
-  welcome_msg = c(
+  welcome_msg <- c(
     "## Welcome to `livecode`!",
     "",
     glue::glue("Serving `{fs::path_file(server$path)}` at"),
@@ -471,6 +486,3 @@ serve_file = function(file, ip, port, interval = 1,
 
   invisible(server)
 }
-
-
-
